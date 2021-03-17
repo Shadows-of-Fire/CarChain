@@ -84,7 +84,7 @@ contract CarPurchase is Ownable {
 		require(msg.sender == CarChain(owner()).getState(), "Only the state can provide state input.");
 		require(state == PurchaseState.AWAITING_STATE, "Not presently awaiting state input.");
 		if(approve){
-			state = PurchaseState.AWAITING_INSN;
+			state = PurchaseState.AWAITING_DEALER;
 		} else {
 			state = PurchaseState.DECLINED_STATE;
 		}
