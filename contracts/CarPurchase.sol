@@ -13,6 +13,8 @@ contract CarPurchase is Ownable {
 
 	enum PurchaseState {
 		STARTED,         //Purchase started.  Buyer can upload documents.
+		//TODO: Bank step needs to be different, loan app needs to be 
+		//non-binary response, which returns loan amt and APR with acceptance capability.
 		AWAITING_BANK,   //Needs bank approval for loan
 		DECLINED_BANK,   //If bank declines, we need to wait for new documents to the bank.
 		AWAITING_INSN,   //Needs insurance approval for purchase.
@@ -23,7 +25,7 @@ contract CarPurchase is Ownable {
 		APPROVED, 		 //Terminal State
 		DECLINED 		 //Terminal State
 	}
-	
+
 	PurchaseState private state = PurchaseState.STARTED;
 	address private immutable _buyerAddr;
 	uint256 private immutable vin;
@@ -52,6 +54,51 @@ contract CarPurchase is Ownable {
 	
 	function getVin() public view returns (uint256) {
 		return vin;
+	}
+	
+	function getMyDocuments() public view returns (string memory) {
+		return documents[msg.sender];
+	}
+	
+	function bankInput(bool approve) public {
+		require(msg.sender == CarChain(owner()).getBank(), "Only the bank can provide bank input.");
+		require(state == PurchaseState.AWAITING_BANK, "Not presently awaiting bank input.");
+		if(approve){
+			state = PurchaseState.AWAITING_INSN;
+		} else {
+			state = PurchaseState.DECLINED_BANK;
+		}
+	}
+	
+	function insnInput(bool approve) public {
+		require(msg.sender == CarChain(owner()).getInsurance(), "Only the insurance can provide insurance input.");
+		require(state == PurchaseState.AWAITING_INSN, "Not presently awaiting insurance input.");
+		if(approve){
+			state = PurchaseState.AWAITING_STATE;
+		} else {
+			state = PurchaseState.DECLINED_INSN;
+		}
+	}
+	
+	function stateInput(bool approve) public {
+		require(msg.sender == CarChain(owner()).getState(), "Only the state can provide state input.");
+		require(state == PurchaseState.AWAITING_STATE, "Not presently awaiting state input.");
+		if(approve){
+			state = PurchaseState.AWAITING_INSN;
+		} else {
+			state = PurchaseState.DECLINED_STATE;
+		}
+	}
+	
+	function dealerInput(bool approve) public {
+		require(msg.sender == CarChain(owner()).getDealer(), "Only the dealer can provide dealer input.");
+		require(state == PurchaseState.AWAITING_DEALER, "Not presently awaiting dealer input.");
+		if(approve){
+			state = PurchaseState.APPROVED;
+		} else {
+			state = PurchaseState.DECLINED;
+		}
+		CarChain(owner()).completePurchase();
 	}
 	
 	function abort() public onlyBuyer {

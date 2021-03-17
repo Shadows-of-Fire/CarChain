@@ -24,6 +24,7 @@ contract CarChain is Ownable {
 	mapping(address => address) private pendingPurchasesReverse;
 
 	constructor(address carTokenAddr){
+		require(carTokenAddr != address(0));
 		_carToken = carTokenAddr;
 	}
 
@@ -78,15 +79,38 @@ contract CarChain is Ownable {
 	* Locks this vin# from new purchases until this purchase completes or fails.
 	*/
 	function startPurchase(uint256 vin) public {
-		require(pendingPurchases[msg.sender] == address(0)); //Cannot start a purchase while one is pending.
-		require(!CarToken(_carToken).isPendingPurchase(vin)); //Cannot start a purchase for a vehicle that is being bought.
+		require(pendingPurchases[msg.sender] == address(0), "A buyer cannot have multiple outstanding purchases."); //Cannot start a purchase while one is pending.
+		require(!CarToken(_carToken).isPendingPurchase(vin), "A purchase cannot be started on a vehicle being purchased."); //Cannot start a purchase for a vehicle that is being bought.
 		CarPurchase p = new CarPurchase(msg.sender, vin);
 		pendingPurchases[msg.sender] = address(p);
 		pendingPurchasesReverse[address(p)] = msg.sender;
+		CarToken(_carToken).setPending(vin, true);
 	}
 	
+    /**
+	* Retrieves the address of the CarPurchase ongoing for the given <buyer>.
+	* May only be done by an authorative party.
+	*/
+	function getPendingPurchase(address buyer) public view returns (address) {
+		require(msg.sender == _dealerAddr || msg.sender == _bankAddr || msg.sender == _stateAddr || msg.sender == _insnAddr, "This may only be invoked by an authority.");
+		return pendingPurchases[buyer];
+	}
+	
+	/**
+	* Retrieves the address of the CarPurchase ongoing for the sender.
+	*/
+	function getMyPendingPurchase() public view returns (address) {
+		return pendingPurchases[msg.sender];
+	}
+	
+	/**
+	* Completes a purchase.  Can only be sent by a CarPurchase instance.
+	* If the purchase is Approved, then the token is transferred.
+	* If it is denied, then nothing else occurs.
+	* The token is always marked as not pending sale.
+	*/
 	function completePurchase() public {
-		require(pendingPurchasesReverse[msg.sender] != address(0)); //Cannot complete a purchase that does not exist.
+		require(pendingPurchasesReverse[msg.sender] != address(0), "Only the CarPurchase contract can complete purchases."); //Cannot complete a purchase that does not exist.
 		address buyer = pendingPurchasesReverse[msg.sender];
 		pendingPurchasesReverse[msg.sender] = address(0);
 		pendingPurchases[buyer] = address(0);
@@ -94,5 +118,6 @@ contract CarChain is Ownable {
 		if(purchase.getState() == CarPurchase.PurchaseState.APPROVED){
 			CarToken(_carToken).safeTransferFrom(_dealerAddr, buyer, purchase.getVin());
 		}
+		CarToken(_carToken).setPending(purchase.getVin(), false);
 	}
 }
