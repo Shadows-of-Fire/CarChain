@@ -5,10 +5,13 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./CarToken.sol";
 import "./CarPurchase.sol";
 
-//This contract has a central deployment authority.
-//After setup, the deployer can relinquish his control by calling renounceOwnership, and the system is decentralized once more.
+/**
+* This contract has a central deployment authority.
+* After setup, the deployer can relinquish his control by calling renounceOwnership, and the system is decentralized once more.
+*/
 contract CarChain is Ownable {
 
+	//Address of the authorized actors - Dealer, Bank, DMV (State), and Insurance Agency.
 	address private _dealerAddr;
 	address private _bankAddr;
 	address private _stateAddr;
@@ -23,48 +26,61 @@ contract CarChain is Ownable {
 	//Mapping of CarPurchase instance to buyer addresses.
 	mapping(address => address) private pendingPurchasesReverse;
 
-	constructor(address carTokenAddr){
+	constructor(address carTokenAddr) {
 		require(carTokenAddr != address(0));
 		_carToken = carTokenAddr;
 	}
 
+	/**
+	* Changes the dealer.  Only accessible by deployer.
+    */
 	function setDealer(address addr) public onlyOwner {
         _dealerAddr = addr;
     }
 	
+	/**
+	* Changes the bank.  Only accessible by deployer.
+    */
 	function setBank(address addr) public onlyOwner {
         _bankAddr = addr;
     }
 	
+	/**
+	* Changes the state.  Only accessible by deployer.
+    */
 	function setState(address addr) public onlyOwner {
         _stateAddr = addr;
     }
 	
+	/**
+	* Changes the insurance.  Only accessible by deployer.
+    */
 	function setInsurance(address addr) public onlyOwner {
         _insnAddr = addr;
     }
 	
-	function getDealer() public view returns (address){
+	function getDealer() public view returns (address) {
 		return _dealerAddr;
 	}
 	
-	function getBank() public view returns (address){
+	function getBank() public view returns (address) {
 		return _bankAddr;
 	}
 	
-	function getState() public view returns (address){
+	function getState() public view returns (address) {
 		return _stateAddr;
 	}
 	
-	function getInsurance() public view returns (address){
+	function getInsurance() public view returns (address) {
 		return _insnAddr;
 	}
 	
 	/**
-	* A function to retrieve all cars owned by the _dealerAddr.
+	* A function to retrieve all cars owned by the dealer.
 	* Returns them as an array.
 	*/
 	function getDealerCars() public view returns (uint256[] memory) {
+		require(_dealerAddr != address(0), "Cannot get dealer cars before dealer has been set!");
 		CarToken carToken = CarToken(_carToken);
 		uint256 amount = carToken.balanceOf(_dealerAddr);
 		uint256[] memory arr = new uint256[](amount);
