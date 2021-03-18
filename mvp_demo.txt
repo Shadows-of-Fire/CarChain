@@ -1,0 +1,102 @@
+/*
+Notes:
+
+To send functions from a specific addr, do obj.function(arg1, arg2, ..., {from: account});
+Defaults to account[0]
+Can easily access account refs from account[i] for address variables.
+
+*/
+
+//MVP Demo Plan -- Anything non-commented should be executed in a console rooted at the project dir.
+
+//Before Opening Console:
+//Open Ganache and start up a new chain with no blocks recorded.
+//Delete build if it exists.
+
+truffle migrate //Build and deploy our contracts
+truffle console --network development //Open Console
+
+//Init variables
+let accounts = await web3.eth.getAccounts();
+let carchain = await CarChain.deployed();
+let cartoken = await CarToken.deployed();
+
+//We need to tell the contracts who our parties are.
+//CarToken needs to know the manufacturer - (accounts[0])
+//CarChain needs to know the dealer/bank/state/insurance (accounts[1/2/3/4] respectively)
+cartoken.setManufacturer(accounts[0]);
+carchain.setDealer(accounts[1]);
+carchain.setBank(accounts[2]);
+carchain.setState(accounts[3]);
+carchain.setInsurance(accounts[4]);
+
+//Tell the token contract who the chain contract is.  Reverse relationship is already known.
+cartoken.setCarChain(carchain.address)
+
+//Dealer confirms trust in the contract, allowing the contract to move tokens on his behalf.
+cartoken.setApprovalForAll(carchain.address, true, {from: accounts[1]);
+
+//Make some new cars.  TODO: Vin# validation.  This is fine for MVP Demo as typing in full VIN's would be terrible.
+cartoken.newCar(accounts[1], 200);
+cartoken.newCar(accounts[1], 202);
+cartoken.newCar(accounts[1], 240);
+
+//Have the buyer view the dealer's cars.
+carchain.getDealerCars({from: accounts[6]});
+
+//To start a purchase, the buyer needs to show intent to purchase.
+//This can be done via carchain.startPurchase(<vin#>).
+//This locks the vin# so that nobody else can attempt to buy it while this transaction is underway.
+//To prevent deadlock, this contract should expire if not processed in a certain amount of time (future feature, not dev req).
+
+//Start a purchase
+carchain.startPurchase(200, {from:accounts[6]}) //We want to buy car #200
+
+//Retrieve that purchase.
+let purchaseAddr = await carchain.getMyPendingPurchase({from: accounts[6]});
+let myPurchase = await CarPurchase.at(purchaseAddr);
+
+//Show State == 0
+myPurchase.getState();
+
+//Switch off to IPFS to upload our files.
+//New Terminal, can't execute node from truffle console.
+node file_upload.js
+
+//Input file name
+//Input target's private key (later to be public key, but cannot generate on-the-fly efficiently).  Public Keys will be posted/known.
+//Repeat for each party, but really we can just upload one document for time's sake in this example.
+
+//Switch back to truffle console
+myPurchase.uploadDocuments(accounts[1], "<CID>", {from:accounts[6]); //Each party needs a doc.  We can send the same doc to all of them for time.
+
+//Show State == 1
+myPurchase.getState();
+
+//Once all docs are uploded, we await the bank's loan approval.
+myPurchase.getMyDocuments({from:accounts[2]});
+
+//Bank approves us.
+myPurchase.bankInput(true, {from:accounts[2]});
+
+//Show State == 3
+myPurchase.getState();
+
+//Awaiting insurance, check documents and approve.
+myPurchase.getMyDocuments({from:accounts[4]});
+myPurchase.insnInput(true, {from:accounts[4]});
+
+//Show State == 5
+myPurchase.getState();
+
+//Awaiting state, check documents and approve.
+myPurchase.getMyDocuments({from:accounts[3]});
+myPurchase.stateInput(true, {from:accounts[3]});
+
+//Show State == 7
+
+//Awaiting dealer, check documents and approve.
+myPurchase.getMyDocuments({from:accounts[1]});
+myPurchase.dealerInput(true, {from:accounts[1]});
+
+//Show that NFT has moved from dealer (accounts[1]) to buyer (accounts[6])
