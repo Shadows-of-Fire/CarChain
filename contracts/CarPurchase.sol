@@ -42,10 +42,28 @@ contract CarPurchase is Ownable {
 		require(state == PurchaseState.STARTED);
 		documents[target] = cid;
 		CarChain chain = CarChain(owner());
-		if( strlen(documents[chain.getDealer()]) != 0 && strlen(documents[chain.getBank()]) != 0 && 
-			strlen(documents[chain.getState()]) != 0 && strlen(documents[chain.getInsurance()]) != 0) {
+		if(strlen(documents[chain.getDealer()]) != 0 && strlen(documents[chain.getBank()]) != 0 && 
+		   strlen(documents[chain.getState()]) != 0 && strlen(documents[chain.getInsurance()]) != 0) {
 			state = PurchaseState.AWAITING_BANK;
 		}
+	}
+	
+	function reuploadBank(string memory cid) public onlyBuyer {
+		require(state == PurchaseState.DECLINED_BANK);
+		documents[CarChain(owner()).getBank()] = cid;
+		state = PurchaseState.AWAITING_BANK;
+	}
+	
+	function reuploadInsn(string memory cid) public onlyBuyer {
+		require(state == PurchaseState.DECLINED_INSN);
+		documents[CarChain(owner()).getInsurance()] = cid;
+		state = PurchaseState.AWAITING_INSN;
+	}
+	
+	function reuploadState(string memory cid) public onlyBuyer {
+		require(state == PurchaseState.DECLINED_STATE);
+		documents[CarChain(owner()).getState()] = cid;
+		state = PurchaseState.AWAITING_STATE;
 	}
 	
 	function getState() public view returns (PurchaseState) {
