@@ -1,3 +1,4 @@
+const ECCrypto = require("eccrypto");
 const EthCrypto = require("eth-crypto");
 const createClient = require('ipfs-http-client')
 const { CID } = require('ipfs-http-client')
@@ -5,24 +6,54 @@ const readline = require('readline').createInterface({
   input: process.stdin,
   output: process.stdout
 })
+const fs = require('fs');
 
-async function download(client, cid, pKey){
-	var retrieved;
+//Copyright eth-crypto : https://github.com/pubkey/eth-crypto/blob/master/LICENSE
+//From eth-crypto/util.js
+function removeLeading0x(str) {
+    if (str.startsWith('0x'))
+        return str.substring(2);
+    else return str;
+}
+
+//Copyright eth-crypto : https://github.com/pubkey/eth-crypto/blob/master/LICENSE
+//From eth-crypto/decrypt-with-private-key.js, modified to not return buffer.toString()
+function decryptWithPrivateKey(privateKey, encrypted) {
+
+    encrypted = EthCrypto.cipher.parse(encrypted);
+
+    // remove trailing '0x' from privateKey
+    const twoStripped = removeLeading0x(privateKey);
+
+    const encryptedBuffer = {
+        iv: Buffer.from(encrypted.iv, 'hex'),
+        ephemPublicKey: Buffer.from(encrypted.ephemPublicKey, 'hex'),
+        ciphertext: Buffer.from(encrypted.ciphertext, 'hex'),
+        mac: Buffer.from(encrypted.mac, 'hex')
+    };
+
+
+    return ECCrypto.decrypt(
+        Buffer.from(twoStripped, 'hex'),
+        encryptedBuffer
+    ).then(decryptedBuffer => decryptedBuffer);
+}
+
+async function download(client, cid, pKey, fName){
+	var received = "";
 
 	for await (const chunk of client.cat(cid)) {
-		var received = new TextDecoder().decode(chunk); 
-		retrieved = received;
-		break;
+		var ret = new TextDecoder().decode(chunk); 
+		received += ret;
 	}
-	
-	const parsed = EthCrypto.cipher.parse(retrieved);
-	
-	const decrypted = await EthCrypto.decryptWithPrivateKey(
+
+	const decrypted = await decryptWithPrivateKey(
 		pKey,
-		parsed
+		received
 	);
 
-	console.log(decrypted);
+	//console.log(decrypted);
+	fs.writeFileSync(fName, decrypted);
 }
 
 async function run() {
@@ -32,8 +63,10 @@ async function run() {
     readline.question('What file do you want to access? ', (cid) => {
 		try {
 			readline.question('What private key should decrypt this file? ', (pKey) => {
-				download(client, cid, pKey);
-				readline.close();
+				readline.question('What should the file be called? ', (fName) => {
+					download(client, cid, pKey, fName);
+					readline.close();
+				});
 			});
 		} catch (err) {
 			console.error(err)

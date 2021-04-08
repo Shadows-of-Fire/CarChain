@@ -30,7 +30,7 @@ async function run() {
  
     readline.question('What file do you want to upload? ', (filename) => {
 		try {
-			const data = fs.readFileSync(filename, 'utf8')
+			const data = fs.readFileSync(filename)
 			readline.question('Who is the target for this file? ', (targetAddr) => {
 				upload(client, data, targetAddr);
 				readline.close();
