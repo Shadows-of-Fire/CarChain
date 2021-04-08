@@ -30,6 +30,22 @@ contract CarToken is ERC721Enumerable, Ownable {
     function setManufacturer(address addr) public onlyOwner {
         manufacturer = addr;
     }
+	
+	/**
+    * Retrieves the manufacturer.
+	* TODO:: For testing only, to be removed before deployment.
+    */
+    function getManufacturer() public view returns (address) {
+       return manufacturer;
+    }
+	
+	/**
+    * Retrieves the car chain.
+	* TODO:: For testing only, to be removed before deployment.
+    */
+    function getCarChain() public view returns (address) {
+        return _carChain;
+    }
     
     /**
     * Sets the car chain address.  Only accessible by deployer.
