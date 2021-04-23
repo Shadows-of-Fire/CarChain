@@ -13,9 +13,8 @@ contract CarPurchase is Ownable {
 
     enum PurchaseState {
         STARTED,         //Purchase started.  Buyer can upload documents.
-        //TODO: Bank step needs to be different, loan app needs to be 
-        //non-binary response, which returns loan amt and APR with acceptance capability.
-        AWAITING_BANK,   //Needs bank approval for loan
+        AWAITING_BANK,   //Needs bank approval for loan.
+        AWAITING_BUYER,  //Awaiting buyer's decision on loan terms.
         DECLINED_BANK,   //If bank declines, we need to wait for new documents to the bank.
         AWAITING_INSN,   //Needs insurance approval for purchase.
         DECLINED_INSN,   //Declined by insurance.
@@ -59,6 +58,17 @@ contract CarPurchase is Ownable {
            strlen(documents[chain.getState()]) != 0 && strlen(documents[chain.getInsurance()]) != 0) {
             state = PurchaseState.AWAITING_BANK;
         }
+    }
+
+    /**
+    * Function for the bank to upload documents.
+    * The files should be encrypted and have to be uploaded to IPFS externally.
+    * Bank needs to approve next in order to transition to state AWAITING_BUYER.
+    */
+    function uploadLoanTerms(address target, string memory cid) public {
+        require(msg.sender == CarChain(owner()).getBank(), "Only the bank can call this method.");
+        require(state == PurchaseState.AWAITING_BANK);
+        documents[target] = cid;
     }
     
     /**
@@ -111,6 +121,18 @@ contract CarPurchase is Ownable {
     function getMyDocuments() public view returns (string memory) {
         return documents[msg.sender];
     }
+
+    /**
+    * Allows the buyer to approve or decline their step in the process.
+    */
+    function buyerInput(bool approve) public onlyBuyer{
+        require(state == PurchaseState.AWAITING_BUYER, "Not presently awaiting buyer input.");
+        if(approve){
+            state = PurchaseState.AWAITING_INSN;
+        } else {
+            state = PurchaseState.DECLINED;
+        }
+    }
     
     /**
     * Allows the bank to approve or decline their step in the process.
@@ -118,8 +140,9 @@ contract CarPurchase is Ownable {
     function bankInput(bool approve) public {
         require(msg.sender == CarChain(owner()).getBank(), "Only the bank can provide bank input.");
         require(state == PurchaseState.AWAITING_BANK, "Not presently awaiting bank input.");
+        require(strlen(documents[_buyerAddr]) != 0, "Loan terms have not been shared with the buyer."); 
         if(approve){
-            state = PurchaseState.AWAITING_INSN;
+            state = PurchaseState.AWAITING_BUYER;
         } else {
             state = PurchaseState.DECLINED_BANK;
         }

@@ -34,13 +34,12 @@ carchain.setInsurance(accounts[4]);
 cartoken.setCarChain(carchain.address)
 
 //Dealer confirms trust in the contract, allowing the contract to move tokens on his behalf.
-cartoken.setApprovalForAll(carchain.address, true, {from: accounts[1]);
+cartoken.setApprovalForAll(carchain.address, true, {from: accounts[1]});
 
 //Make some new cars.  TODO: Vin# validation.  This is fine for MVP Demo as typing in full VIN's would be terrible.
 cartoken.newCar(accounts[1], 200);
 cartoken.newCar(accounts[1], 202);
 cartoken.newCar(accounts[1], 240);
-
 //Have the buyer view the dealer's cars.
 carchain.getDealerCars({from: accounts[6]});
 
@@ -68,32 +67,42 @@ node file_upload.js
 //Repeat for each party, but really we can just upload one document for time's sake in this example.
 
 //Switch back to truffle console
-myPurchase.uploadDocuments(accounts[1], "<CID>", {from:accounts[6]); //Each party needs a doc.  We can send the same doc to all of them for time.
+myPurchase.uploadDocuments(accounts[1], "<CID>", {from:accounts[6]}); //Each party needs a doc.  We can send the same doc to all of them for time.
 
 //Show State == 1
 myPurchase.getState();
 
-//Once all docs are uploded, we await the bank's loan approval.
+//Once all docs are uploded, we await the bank's next step.
 myPurchase.getMyDocuments({from:accounts[2]});
 
-//Bank approves us.
+//Bank reviews a request from buyer and uploads a loan offer
+myPurchase.uploadLoanTerms(accounts[6],"<CID>", {from:accounts[2]});
+
+//Bank approves to advance to next stage
 myPurchase.bankInput(true, {from:accounts[2]});
 
-//Show State == 3
+//Show State == 2
+myPurchase.getState();
+
+//Buyer reviews the offer and accepts it
+myPurchase.getMyDocuments({from:accounts[6]});
+myPurchase.buyerInput(true, {from:accounts[6]});
+
+//Show State == 4
 myPurchase.getState();
 
 //Awaiting insurance, check documents and approve.
 myPurchase.getMyDocuments({from:accounts[4]});
 myPurchase.insnInput(true, {from:accounts[4]});
 
-//Show State == 5
+//Show State == 6
 myPurchase.getState();
 
 //Awaiting state, check documents and approve.
 myPurchase.getMyDocuments({from:accounts[3]});
 myPurchase.stateInput(true, {from:accounts[3]});
 
-//Show State == 7
+//Show State == 8
 
 //Awaiting dealer, check documents and approve.
 myPurchase.getMyDocuments({from:accounts[1]});
