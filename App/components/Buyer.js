@@ -3,14 +3,11 @@ import Web3 from 'web3'
 import './App.css';
 import CarChain from '../abis/CarChain.json'
 import CarPurchase from '../abis/CarPurchase.json'
+const ECCrypto = require("eccrypto");
 const EthCrypto = require("eth-crypto");
 const createClient = require('ipfs-http-client')
 
 class Buyer extends Component {
-    getCid = () =>{
-        return this.state.cid;
-    }
-
     async componentWillMount() {
         await this.loadWeb3()
         await this.loadBlockchainData()
@@ -44,18 +41,9 @@ class Buyer extends Component {
             const chain = new web3.eth.Contract(abi, address)
             this.setState({chainContract: chain})
 
-            //get all the clients
-            var temp = await chain.methods.getDealer().call();
-            this.setState({dealer: temp})
-            temp = await chain.methods.getBank().call();
-            this.setState({bank: temp})
-            temp = await chain.methods.getState().call();
-            this.setState({gov: temp})
-            temp = await chain.methods.getInsurance().call();
-            this.setState({insurance: temp})
-
             //get CarPurchase contract address and deploy it using web3
-            var purAddr = await this.state.chainContract.methods.getMyPendingPurchase().call({from:this.state.buyer})
+            if(this.state.buyer)
+                var purAddr = await this.state.chainContract.methods.getMyPendingPurchase().call({from:this.state.buyer})
             if(purAddr){
                 const abi3 = CarPurchase.abi
                 const purchase = new web3.eth.Contract(abi3, purAddr)
@@ -86,25 +74,28 @@ class Buyer extends Component {
             routing: "",
             vin: "",
             
-            buffer: null,
-            publicKey: '',
-            targetAddress: '',
-            output:'',
+            buffer: null, 
 
-            buyer: '0xC786EbF555B8B9626E8C0C44940ea1869feB1BD7',
-            dealer: '',
-            bank: '',
-            gov: '',
-            insurance: '',
+            buyer: '0xb4C78Ae1848AA5Fc75bb684E36791d4123348afa',
+            bank: this.removeLeading0x(EthCrypto.hex.decompress('UvA7/b+KLuZxmAxYV0NuFfOhmMsyW+xxe2aSdgq5DrP1fmZ9m+CJbMoctiTlhwXAdoAe1umeFCTgZEO5Za/jPQ==',true)),
+            insurance: this.removeLeading0x(EthCrypto.hex.decompress('gYrUSEauTtQRLrsRQaSCyK8u5q6FTdNt6wQ+56RSJco2m/WK3+Mh814cC1Rcm70odYKIVuY0VjNI/ckxpnTWgA==',true)),
+            gov: this.removeLeading0x(EthCrypto.hex.decompress('RDP/nXqv6b3zTASO7+5qTr1U5d1IbKG0Wnv02UvD9bKl+xV0DDLUtkbyWL4lghe2BUwKe9dv+j8trmW4uYv7Kg==',true)),
+            dealer: this.removeLeading0x(EthCrypto.hex.decompress('FerZQtes8EzS6Bxj2v/L6ynyJ7G0PhqNg0+5mS1VkEfa/OE9znwzpp32PLzk1Ey54wJ0R+z67W+hmn3I2VMc3Q==',true)),  
+            publicKey: this.removeLeading0x(EthCrypto.hex.decompress('uCeYa2znDlEanGgpsEGD1wt6q7Ij+Gwm/122ii9dPWcI1UDZtwg/TFgp3V892XuvWCqRwuKdsRlAcL77ES6biw==',true)),
 
             chainContract: null,
             purchaseContract: null,
             purchaseAddr: '',
             states: -1,
-            cid: ''
+            cid: '',
+
+            getCid: '',
+            fName: 'Loan',
+            privateKey: ''
         }
     }
 
+    //get the current file selected
     captureFile = (event) => {
         event.preventDefault()
         const file = event.target.files[0]
@@ -117,11 +108,11 @@ class Buyer extends Component {
     }
     
     upload = async(client, data, targetAddr) =>{
-        const encrypted = await EthCrypto.encryptWithPublicKey(EthCrypto.publicKeyByPrivateKey(targetAddr), data);
+        const encrypted = await EthCrypto.encryptWithPublicKey(targetAddr, data);
         const str = EthCrypto.cipher.stringify(encrypted);
         const {cid} = await client.add(str);
         this.setState({cid: cid.toString()})
-        //Spit out the CID for the document -- TODO: This will be passed to the smart contract.
+        //Spit out the CID for the document
         window.alert("Your document has been uploaded.  Its CID is " + cid.toString());
     }
     
@@ -129,13 +120,38 @@ class Buyer extends Component {
         //Open IPFS connection to local IPFS node
         const client = createClient({host: 'ipfs.infura.io', port: 5001, protocol: 'https'});
         try {
-            this.upload(client, this.state.buffer, this.state.publicKey);
-
+            this.makeOutput();
+            await this.upload(client, this.state.buffer, this.state.publicKey);
             //if the user already uploaded send it to the target
             if(this.state.cid){
-                await this.state.purchaseContract.methods.uploadDocuments(this.state.targetAddress,this.state.cid).send({from:this.state.account})
+                await this.state.purchaseContract.methods.uploadDocuments(EthCrypto.publicKey.toAddress(this.state.publicKey),this.state.cid).send({from:this.state.account})
                 console.log(await this.state.purchaseContract.methods.getState().call())
             }
+            this.setState({buffer: ''})
+        } catch (err) {
+            console.error(err)
+        }
+    }
+
+
+    //when in declined state, you can reupload
+    reUpload = async() => {
+        const client = createClient({host: 'ipfs.infura.io', port: 5001, protocol: 'https'});
+        this.makeOutput();
+        try{
+            if(this.state.states === 3){
+                await this.upload(client, this.state.buffer, this.state.bank);
+                await this.state.purchaseContract.methods.reuploadBank(this.state.cid).send({from:this.state.account});
+            }
+            else if(this.state.states === 5){
+                await this.upload(client, this.state.buffer, this.state.insurance);
+                await this.state.purchaseContract.methods.reuploadInsn(this.state.cid).send({from:this.state.account});
+            }
+            else if(this.state.states === 7){
+                await this.upload(client, this.state.buffer, this.state.gov);
+                await this.state.purchaseContract.methods.reuploadState(this.state.cid).send({from:this.state.account});
+            }
+            this.setState({buffer: ''})
         } catch (err) {
             console.error(err)
         }
@@ -150,6 +166,7 @@ class Buyer extends Component {
         this.run()
     }
 
+    //All the handlers for the inputs
     firsthandler = (event) => {
         this.setState({
             firstName: event.target.value
@@ -167,7 +184,7 @@ class Buyer extends Component {
     }
     insurancehandler = (event) => {
         this.setState({
-            insurance: event.target.value
+            insurancePolicy: event.target.value
         })
     }
     bankAccounthandler = (event) => {
@@ -190,19 +207,30 @@ class Buyer extends Component {
             publicKey: event.target.value
         })
     }
-    targetaddresshandler = (event) => {
+    privatekeyhandler = (event) => {
         this.setState({
-            targetAddress: event.target.value
+            privateKey: event.target.value
+        })
+    }
+    cidhandler = (event) => {
+        this.setState({
+            getCid: event.target.value
+        })
+    }
+    pkeyhandler = (event) => {
+        this.setState({
+            pKey: event.target.value
         })
     }
 
+    //Changes the rectangle depending on the States
     setStyle = (pending,done,deny) =>{
         let styles = {}
         if (this.state.states === pending){
             styles = 'rectanglePending'
         }
         else if (this.state.states === deny){
-            styles = 'rectangeDeny'
+            styles = 'rectangleDeny'
         }
         else if (this.state.states >= done){
             styles = 'rectangleDone'
@@ -213,7 +241,54 @@ class Buyer extends Component {
         return styles.toString()
     }
 
-    download = (filename, text) =>{
+    makeOutput = () =>{
+        const str = '\n\n\t\tINFORMATION\n\n'+'First Name: ' + this.state.firstName + '\nLast Name: ' + this.state.lastName + '\nAddress: ' + this.state.address +
+                    '\nInsurancy Policy Number: ' + this.state.insurancePolicy + '\nBank Account Number: ' + this.state.bankAccount +
+                    '\nRouting Number: ' + this.state.routing
+        this.state.buffer += str;
+    }
+
+    /******************************************************************************************
+     Functions for getting file from the Bank
+    ******************************************************************************************/
+
+    getCID = async () => {
+        var temp = await this.state.purchaseContract.methods.getMyDocuments().call({from:this.state.account})
+        window.alert(temp)
+    }
+
+    //Copyright eth-crypto : https://github.com/pubkey/eth-crypto/blob/master/LICENSE
+    //From eth-crypto/util.js
+    removeLeading0x = (str) => {
+        if (str.startsWith('0x'))
+            return str.substring(2);
+        else return str;
+    }
+
+    //Copyright eth-crypto : https://github.com/pubkey/eth-crypto/blob/master/LICENSE
+    //From eth-crypto/decrypt-with-private-key.js, modified to not return buffer.toString()
+    decryptWithPrivateKey = (privateKey, encrypted)=>{
+
+        encrypted = EthCrypto.cipher.parse(encrypted);
+
+        // remove trailing '0x' from privateKey
+        const twoStripped = this.removeLeading0x(privateKey);
+
+        const encryptedBuffer = {
+            iv: Buffer.from(encrypted.iv, 'hex'),
+            ephemPublicKey: Buffer.from(encrypted.ephemPublicKey, 'hex'),
+            ciphertext: Buffer.from(encrypted.ciphertext, 'hex'),
+            mac: Buffer.from(encrypted.mac, 'hex')
+        };
+
+
+        return ECCrypto.decrypt(
+            Buffer.from(twoStripped, 'hex'),
+            encryptedBuffer
+        ).then(decryptedBuffer => decryptedBuffer);
+    }
+
+    downloading = (filename, text) =>{
         var blob = new Blob([text], {type: "text/plain"});
         var url = window.URL.createObjectURL(blob);
         var a = document.createElement("a");
@@ -222,12 +297,43 @@ class Buyer extends Component {
         a.click();
     }
 
-    makeOutput = () =>{
-        const str = 'First Name: ' + this.state.firstName + '\nLast Name: ' + this.state.lastName + '\nAddress: ' + this.state.address +
-                    '\nInsurancy Policy Number: ' + this.state.insurancePolicy + '\nBank Account Number: ' + this.state.bankAccount +
-                    '\nRouting Number: ' + this.state.routing + '\nVIN Number: ' + this.state.vin  
-        this.download('input.txt', str);
+    download = async(client, cid, pKey, fName)=>{
+        var received = "";
+
+        for await (const chunk of client.cat(cid)) {
+            var ret = new TextDecoder().decode(chunk); 
+            received += ret;
+        }
+        const decrypted = await this.decryptWithPrivateKey(
+            pKey,
+            received
+        );
+        this.setState({
+            decrypted: decrypted
+        })
+        this.downloading(fName,decrypted)
     }
+
+    getFile = async() => {
+        const client = createClient({host: 'ipfs.infura.io', port: 5001, protocol: 'https'});
+        try {
+            this.download(client, this.state.getCid, this.state.pKey, this.state.fName);
+        } catch (err) {
+            console.error(err)
+        }
+    }
+
+    buyerInput = async (approve) => {
+        await this.state.purchaseContract.methods.buyerInput(approve).send({from:this.state.account})
+    }
+
+    createP = (address) =>{
+        const key = EthCrypto.publicKeyByPrivateKey(address);
+        var a = EthCrypto.hex.compress(key,true)
+        console.log(a)
+    }
+
+
 
     render() {
         return (
@@ -241,72 +347,108 @@ class Buyer extends Component {
             >
                 <div style={{fontWeight:'bold', color:'rgba(255, 255, 255)', backgroundColor: 'rgba(0, 0, 0, 0.6 )'}}>
                     <form>
-                        <h1 style={{
-                            display: "flex",
-                            alignItems:'center',
-                            justifyContent: "center",
-                        }}className='form-h1'>Purchasing Contract</h1>
-                        <label id="formLabel">First Name :</label> <input id="formInput" type="text" value={this.state.firstName} onChange={this.firsthandler} placeholder="First Name..." />
-                        <label id="formLabel">Last Name :</label> <input id="formInput"  type="text" value={this.state.lastName} onChange={this.lasthandler} placeholder="Last Name..." /><br />
-                        <label id="formLabel">Address :</label> <input id="formInput"  type="text" value={this.state.address} onChange={this.addresshandler} placeholder="Address..." />
-                        <label id="formLabel">Insurance Policy # :</label> <input id="formInput"  type="text" value={this.state.insurancePolicy} onChange={this.insurancehandler} placeholder="Insurance Policy #..." /><br />
-                        <label id="formLabel">Bank Account # :</label> <input id="formInput"  type="text" value={this.state.bankAccount} onChange={this.bankAccounthandler} placeholder="Bank Account #..." />
-                        <label id="formLabel">Routing # :</label> <input id="formInput"  type="text" value={this.state.routing} onChange={this.routinghandler} placeholder="Routing Number..." /><br />
+                        <h1 className='form-h1'>Purchasing Contract</h1>
                         <form onSubmit={(event)=>{
                                 event.preventDefault()
                                 this.startPurchase(this.state.vin)
                                 }}>
                             <label id="formLabel">VIN # :</label> <input id="formInput"  type="text" value={this.state.vin} onChange={this.vinhandler} placeholder="VIN Number..." />
                             <input type="submit" value="Check VIN Number/Start Buying Process "/>
-                        </form>
-                
-                        
-                        <h1 className='form-h1'>Upload Documents</h1>
+                        </form><br/>
+                        <h1 className='form-h1'>Fill Information/Upload Documents</h1>
+                        <label id="formLabel">First Name :</label> <input id="formInput" type="text" value={this.state.firstName} onChange={this.firsthandler} placeholder="First Name..." />
+                        <label id="formLabel">Last Name :</label> <input id="formInput"  type="text" value={this.state.lastName} onChange={this.lasthandler} placeholder="Last Name..." /><br />
+                        <label id="formLabel">Address :</label> <input id="formInput"  type="text" value={this.state.address} onChange={this.addresshandler} placeholder="Address..." />
+                        <label id="formLabel">Insurance Policy # :</label> <input id="formInput"  type="text" value={this.state.insurancePolicy} onChange={this.insurancehandler} placeholder="Insurance Policy #..." /><br />
+                        <label id="formLabel">Bank Account # :</label> <input id="formInput"  type="text" value={this.state.bankAccount} onChange={this.bankAccounthandler} placeholder="Bank Account #..." />
+                        <label id="formLabel">Routing # :</label> <input id="formInput"  type="text" value={this.state.routing} onChange={this.routinghandler} placeholder="Routing Number..." /><br />
                         <form onSubmit={this.onSubmit}>
                             <label id="formLabel">Documents :</label> 
                             <input type="file" onChange={this.captureFile}/><br/>
-                            <label id="formLabel">Target Private Key:</label> <input id="formInput"  type="text" value={this.state.publicKey} onChange={this.publichandler} placeholder="Public Key..." />
-                            <label id="formLabel">Target Address:</label> <input id="formInput"  type="text" value={this.state.targetAddress} onChange={this.addresshandler} placeholder="Address..." /><br/>
+                            <label id="formLabel">
+                                Choose Target:
+                            </label>       
+                            <select value={this.state.publicKey} onChange={this.publichandler}>
+                                <option value={this.state.dealer}>Dealer</option>
+                                <option value={this.state.bank}>Bank</option>
+                                <option value={this.state.insurance}>Insurance</option>
+                                <option value={this.state.gov}>State</option>
+                            </select>
+                            <br/>
                             <input id='formButton' type="submit" value="Upload"/>
                         </form>
+                        <form onSubmit={(event)=>{
+                            event.preventDefault()
+                            this.reUpload()
+                        }}>
+                            <input id='formButton' type="submit" value="Re-upload"/>    
+                        </form>
+                        <h1 className='form-h1'>Accept or Decline Bank Loan Term</h1>
+                        <label id="formLabel">CID :</label> <input id="formInput" type="text" value={this.state.getCid} onChange={this.cidhandler} placeholder="CID..." />
+                        <form onSubmit={(event)=>{
+                            event.preventDefault()
+                            this.getCID()
+                            }}>    
+                            <input id="formButton" type="submit" value="Get CID"/>
+                        </form> <br/>
+                        <label id="formLabel">Private Key :</label> <input id="formInput"  type="text" value={this.state.pKey} onChange={this.pkeyhandler} placeholder="Private Key..." />
+                        <form onSubmit={(event)=>{
+                            event.preventDefault()
+                            this.getFile()
+                            }}>    
+                            <input id="formButton" type="submit" value="Get File"/>
+                        </form><br/>
+                        <form onSubmit={(event)=>{
+                            event.preventDefault()
+                            this.buyerInput(1)
+                        }}>
+                            <input id="formButton" type="submit" value="Approve" />
+                        </form>
+                        <form onSubmit={(event)=>{
+                            event.preventDefault()
+                            this.buyerInput(0)
+                            }}>
+                        <input id="formButton" type="submit" value="Disapprove" />
+                        </form>
 
-                        <h1 className='form-h1'>Status </h1>              
+                        <h1 className='form-h1'>Status </h1>             
                         <div className={this.setStyle(0,1,-2)}>
                             <p className="text">Start</p>
                         </div>
-                        <div className={this.setStyle(1,3,2)}>
+                        <div className={this.setStyle(1,2,3)}>
                             <p className="text">Bank</p>
                         </div>
-                        <div className={this.setStyle(3,5,4)}>
+                        <div className={this.setStyle(2,4,10)}>
+                            <p className="text">Loan</p>
+                        </div>
+                        <div className={this.setStyle(4,6,5)}>
                             <p className="text">Insurance</p>
                         </div>
-                        <div className={this.setStyle(5,7,6)}>
+                        <div className={this.setStyle(6,8,7)}>
                             <p className="text">State</p>
                         </div>
-                        <div className={this.setStyle(7,8,-2)}>
+                        <div className={this.setStyle(8,9,-2)}>
                             <p className="text">Dealer</p>
-                        </div>
-                        <div className={this.setStyle(8,100,9)}>
-                            <p className="text">Complete</p>
                         </div><br/>
-                        <form onSubmit={(event)=>{
-                            event.preventDefault()
-                            this.makeOutput()
-                        }}>
-                                <input id='formButton' type="submit" value="Done"/>
-                        </form>
                         <form onSubmit={(event)=>{
                             event.preventDefault()
                             this.stop()
                         }}>
-                                <input id='formButton' type="submit" value="Stop the Purchase"/>
-                        </form>
-                    
+                            <input id='formButton' type="submit" value="Stop the Purchase"/>    
+                        </form><br/>     
                     </form>
                 </div>
             </div>          
         );
     }
 }
-
+/*
+<label id="formLabel">Private Key :</label> <input id="formInput"  type="text" value={this.state.privateKey} onChange={this.privatekeyhandler} placeholder="Private Key..." />
+                        <form onSubmit={(event)=>{
+                            event.preventDefault()
+                            this.createP(this.state.privateKey)
+                            }}>    
+                            <input id="formButton" type="submit" value="Get PrivateKey"/>
+                        </form><br/>    
+*/
 export default Buyer

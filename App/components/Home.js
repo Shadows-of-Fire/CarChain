@@ -3,7 +3,6 @@ import Web3 from 'web3'
 import './App.css';
 import CarChain from '../abis/CarChain.json'
 import CarToken from '../abis/CarToken.json'
-import Background from './image/road.jpg'
 
 class Home extends Component {
     async componentWillMount() {

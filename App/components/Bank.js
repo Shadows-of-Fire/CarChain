@@ -60,7 +60,7 @@ class Bank extends Component {
 
         this.state = {
             account:'',
-            buyer: '0xC786EbF555B8B9626E8C0C44940ea1869feB1BD7',
+            buyer: '0xb4C78Ae1848AA5Fc75bb684E36791d4123348afa',
 
             states: '',
             chainContract: null,
@@ -69,8 +69,55 @@ class Bank extends Component {
             cid: '',
             pKey: '',
             fName: '',
-            decrypted: ''
+            decrypted: '',
+            publicKey: this.removeLeading0x(EthCrypto.hex.decompress('uCeYa2znDlEanGgpsEGD1wt6q7Ij+Gwm/122ii9dPWcI1UDZtwg/TFgp3V892XuvWCqRwuKdsRlAcL77ES6biw==',true)),
+
+            getCid: ''
         }
+    }
+    captureFile = (event) => {
+        event.preventDefault()
+        const file = event.target.files[0]
+        const reader = new window.FileReader()
+        reader.readAsArrayBuffer(file)
+        reader.onloadend = () => {
+          this.setState({ buffer: Buffer(reader.result) })
+          console.log('buffer', this.state.buffer)
+        }
+    }
+    
+    upload = async(client, data, targetAddr) =>{
+        const encrypted = await EthCrypto.encryptWithPublicKey(targetAddr, data);
+        const str = EthCrypto.cipher.stringify(encrypted);
+        const {cid} = await client.add(str);
+        this.setState({cid: cid.toString()})
+        //Spit out the CID for the document
+        window.alert("Your document has been uploaded.  Its CID is " + cid.toString());
+    }
+    
+    run = async() => {
+        //Open IPFS connection to local IPFS node
+        const client = createClient({host: 'ipfs.infura.io', port: 5001, protocol: 'https'});
+        try {
+            await this.upload(client, this.state.buffer, this.state.publicKey);
+
+            //if the user already uploaded send it to the target
+            if(this.state.cid){
+                await this.state.purchaseContract.methods.uploadLoanTerms(this.state.buyer,this.state.cid).send({from:this.state.account})
+                console.log(await this.state.purchaseContract.methods.getState().call())
+            }
+        } catch (err) {
+            console.error(err)
+        }
+    }
+
+    stop = async() => {
+        await this.state.purchaseContract.methods.abort().send({from:this.state.account})
+    }
+
+    onSubmit = (event) => {
+        event.preventDefault()
+        this.run()
     }
 
     //Copyright eth-crypto : https://github.com/pubkey/eth-crypto/blob/master/LICENSE
@@ -130,13 +177,10 @@ class Bank extends Component {
         this.downloading(fName,decrypted)
     }
 
-    run = async() => {
+    getFile = async() => {
         const client = createClient({host: 'ipfs.infura.io', port: 5001, protocol: 'https'});
-        //const cid = 'QmYewYFMP5nJxpf6tpmBSndjgJ3wAwsJJUzuwuyRZzrVXV'
-        //const pKey ='27be98b7ff8f2c5cd59f523cab32098bbf3ad2fa1d1c5fc305d6cc30cdffedeb'
-        //const fName ='hello'
         try {
-            this.download(client, this.state.cid, this.state.pKey, this.state.fName);
+            this.download(client, this.state.getCid, this.state.pKey, this.state.fName);
         } catch (err) {
             console.error(err)
         }
@@ -144,7 +188,7 @@ class Bank extends Component {
 
     cidhandler = (event) => {
         this.setState({
-            cid: event.target.value
+            getCid: event.target.value
         })
     }
     pkeyhandler = (event) => {
@@ -157,6 +201,11 @@ class Bank extends Component {
             fName: event.target.value
         })
     }
+    publichandler = (event) => {
+        this.setState({
+            publicKey: event.target.value
+        })
+    }
 
     setStyle = (pending,done,deny) =>{
         let styles = {}
@@ -164,7 +213,7 @@ class Bank extends Component {
             styles = 'rectanglePending'
         }
         else if (this.state.states === deny){
-            styles = 'rectangeDeny'
+            styles = 'rectangleDeny'
         }
         else if (this.state.states >= done){
             styles = 'rectangleDone'
@@ -175,13 +224,13 @@ class Bank extends Component {
         return styles.toString()
     }
 
-    bankInput = async (approve) => {
-        await this.state.purchaseContract.methods.bankInput(approve).send({from:this.state.account})
-    }
-
     getCID = async () => {
         var temp = await this.state.purchaseContract.methods.getMyDocuments().call({from:this.state.account})
         window.alert(temp)
+    }
+
+    decline = async ()=> {
+        await this.state.purchaseContract.methods.bankInput(0).send({from:this.state.account})
     }
    
     render() {
@@ -200,56 +249,56 @@ class Bank extends Component {
                             alignItems:'center',
                             justifyContent: "center",
                         }}className='form-h1'>Review Documents</h1>
-                    <label id="formLabel">CID :</label> <input id="formInput" type="text" value={this.state.cid} onChange={this.cidhandler} placeholder="CID..." /><br/>
+                    <label id="formLabel">CID :</label> <input id="formInput" type="text" value={this.state.getCid} onChange={this.cidhandler} placeholder="CID..." />
                     <form onSubmit={(event)=>{
                         event.preventDefault()
                         this.getCID()
                         }}>    
                         <input id="formButton" type="submit" value="Get CID"/>
-                    </form>
+                    </form><br/>
                     <label id="formLabel">Private Key :</label> <input id="formInput"  type="text" value={this.state.pKey} onChange={this.pkeyhandler} placeholder="Private Key..." /><br />
                     <label id="formLabel">File Name :</label> <input id="formInput"  type="text" value={this.state.fName} onChange={this.fnamehandler} placeholder="File Name..." /><br />
                     <form onSubmit={(event)=>{
                         event.preventDefault()
-                        this.run()
+                        this.getFile()
                         }}>    
                         <input id="formButton" type="submit" value="Get File"/>
-                    </form>
+                    </form><br/>
                     <form onSubmit={(event)=>{
                         event.preventDefault()
-                        this.bankInput(1)
-                        }}>
-                    <input id="formButton" type="submit" value="Approve" />
-                    </form>
-                    <form onSubmit={(event)=>{
-                        event.preventDefault()
-                        this.bankInput(0)
-                        }}>
-                    <input id="formButton" type="submit" value="Disapprove" />
+                        this.decline()
+                        }}>    
+                        <input id="formButton" type="submit" value="Decline"/>
                     </form>
 
-                    <h1 className='form-h1'>Status </h1>              
+                    <h1 className='form-h1'>Upload Loan Documents to Buyer</h1>
+                        <form onSubmit={this.onSubmit}>
+                            <label id="formLabel">Documents :</label> 
+                            <input type="file" onChange={this.captureFile}/><br/>
+                            <input id='formButton' type="submit" value="Upload"/>
+                        </form>
+
+                    <h1 className='form-h1'>Status </h1>             
                     <div className={this.setStyle(0,1,-2)}>
                         <p className="text">Start</p>
                     </div>
-                    <div className={this.setStyle(1,3,2)}>
+                    <div className={this.setStyle(1,2,3)}>
                         <p className="text">Bank</p>
                     </div>
-                    <div className={this.setStyle(3,5,4)}>
+                    <div className={this.setStyle(2,4,10)}>
+                        <p className="text">Loan</p>
+                    </div>
+                    <div className={this.setStyle(4,6,5)}>
                         <p className="text">Insurance</p>
                     </div>
-                    <div className={this.setStyle(5,7,6)}>
+                    <div className={this.setStyle(6,8,7)}>
                         <p className="text">State</p>
                     </div>
-                    <div className={this.setStyle(7,8,-2)}>
+                    <div className={this.setStyle(8,9,-2)}>
                         <p className="text">Dealer</p>
-                    </div>
-                    <div className={this.setStyle(8,100,9)}>
-                        <p className="text">Complete</p>
                     </div><br/>
                 </div>
             </div>
-            
         );
     }
 }

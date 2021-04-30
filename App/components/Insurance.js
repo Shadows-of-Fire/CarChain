@@ -60,7 +60,7 @@ class Insurance extends Component {
 
         this.state = {
             account:'',
-            buyer: '0xC786EbF555B8B9626E8C0C44940ea1869feB1BD7',
+            buyer: '0xb4C78Ae1848AA5Fc75bb684E36791d4123348afa',
 
             states: '',
             chainContract: null,
@@ -161,7 +161,7 @@ class Insurance extends Component {
             styles = 'rectanglePending'
         }
         else if (this.state.states === deny){
-            styles = 'rectangeDeny'
+            styles = 'rectangleDeny'
         }
         else if (this.state.states >= done){
             styles = 'rectangleDone'
@@ -197,20 +197,20 @@ class Insurance extends Component {
                         alignItems:'center',
                         justifyContent: "center",
                         }} className='form-h1'>Review Documents</h1>
-                    <label id="formLabel">CID :</label> <input id="formInput" type="text" value={this.state.cid} onChange={this.cidhandler} placeholder="CID..." /><br/>
+                    <label id="formLabel">CID :</label> <input id="formInput" type="text" value={this.state.cid} onChange={this.cidhandler} placeholder="CID..." />
                     <form onSubmit={(event)=>{
                         event.preventDefault()
                         this.getCID()
                         }}>    
                         <input id="formButton" type="submit" value="Get CID"/>
-                    </form>
+                    </form><br/>
                     <label id="formLabel">Private Key :</label> <input id="formInput"  type="text" value={this.state.pKey} onChange={this.pkeyhandler} placeholder="Private Key..." /><br />
                     <label id="formLabel">File Name :</label> <input id="formInput"  type="text" value={this.state.fName} onChange={this.fnamehandler} placeholder="File Name..." /><br />
                     <form onSubmit={(event)=>{
                         event.preventDefault()
                         this.run()
                         }}>    
-                        <input id="formButton" type="submit" value="Get File"/>
+                        <input id="formButton" type="submit" value="Get File"/><br/>
                     </form>
                     <form onSubmit={(event)=>{
                         event.preventDefault()
@@ -225,24 +225,24 @@ class Insurance extends Component {
                     <input id="formButton" type="submit" value="Disapprove" />
                     </form>
 
-                    <h1 className='form-h1'>Status </h1>              
+                    <h1 className='form-h1'>Status </h1>             
                     <div className={this.setStyle(0,1,-2)}>
                         <p className="text">Start</p>
                     </div>
-                    <div className={this.setStyle(1,3,2)}>
+                    <div className={this.setStyle(1,2,3)}>
                         <p className="text">Bank</p>
                     </div>
-                    <div className={this.setStyle(3,5,4)}>
+                    <div className={this.setStyle(2,4,10)}>
+                        <p className="text">Loan</p>
+                    </div>
+                    <div className={this.setStyle(4,6,5)}>
                         <p className="text">Insurance</p>
                     </div>
-                    <div className={this.setStyle(5,7,6)}>
+                    <div className={this.setStyle(6,8,7)}>
                         <p className="text">State</p>
                     </div>
-                    <div className={this.setStyle(7,8,-2)}>
+                    <div className={this.setStyle(8,9,-2)}>
                         <p className="text">Dealer</p>
-                    </div>
-                    <div className={this.setStyle(8,100,9)}>
-                        <p className="text">Complete</p>
                     </div><br/>
                 </div>
             </div>

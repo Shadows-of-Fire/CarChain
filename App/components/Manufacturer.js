@@ -67,13 +67,42 @@ class Manufacturer extends Component {
   }
 
   addCar = async(car) => {
-    console.log(car)
+    this.vinCheck(car)
     await this.state.tokenContract.methods.newCar(this.state.dealer, car).send({from:this.state.account})
     .once('receipt',(receipt)=>{
       this.setState({
         cars:[...this.state.cars, car.toString()]
       })
     })
+  }
+
+
+  vinCheck = (vin) => {
+      if(vin.length !== 17) throw new Error("Invalid VIN");
+      var arr = new Uint8Array(17);
+      for(var i = 0; i < 17; i++){
+          arr[i] = this.encode(vin.charAt(i));
+      }
+      console.log(this.decode(arr));
+  }
+
+  encode = (c) => {
+      if (c === 'O' || c === 'I' || c === 'Q') throw new Error("Invalid VIN");
+      if (c >= '0' && c <= '9') { return (c.charCodeAt(0) - this.state.CODE_ZERO); }
+      if (c >= 'A' && c <= 'Z') { return (10 + c.charCodeAt(0) - this.state.CODE_A); }
+      throw new Error("Invalid VIN");
+  }
+
+  decode = (encoded) => {
+      if(encoded.byteLength !== 17) throw new Error("Attmepted to decode invalid VIN");
+      var s = "";
+      for (var i = 0; i < 17; i++) {
+          var b = encoded[i];
+          if (b < 10) s += String.fromCharCode(b + this.state.CODE_ZERO);
+          else if (b < 36) s += String.fromCharCode(b - 10 + this.state.CODE_A);
+          else throw new Error("Invalid Character");
+      }
+      return s;
   }
 
   constructor(props) {
@@ -86,7 +115,9 @@ class Manufacturer extends Component {
       chainContract: null,
       totalSupply: 0,
       cars: [],
-      bgColor: ''
+      bgColor: '',
+      CODE_ZERO: '0'.charCodeAt(0),
+      CODE_A: 'A'.charCodeAt(0)
     }
   }
 

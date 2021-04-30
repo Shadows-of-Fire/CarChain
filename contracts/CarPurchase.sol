@@ -13,8 +13,8 @@ contract CarPurchase is Ownable {
 
     enum PurchaseState {
         STARTED,         //Purchase started.  Buyer can upload documents.
-        AWAITING_BANK,   //Needs bank approval for loan.
-        AWAITING_BUYER,  //Awaiting buyer's decision on loan terms.
+        AWAITING_BANK,   //Needs bank approval for loan
+        AWAITING_BUYER,
         DECLINED_BANK,   //If bank declines, we need to wait for new documents to the bank.
         AWAITING_INSN,   //Needs insurance approval for purchase.
         DECLINED_INSN,   //Declined by insurance.
@@ -69,6 +69,7 @@ contract CarPurchase is Ownable {
         require(msg.sender == CarChain(owner()).getBank(), "Only the bank can call this method.");
         require(state == PurchaseState.AWAITING_BANK);
         documents[target] = cid;
+        state = PurchaseState.AWAITING_BUYER;
     }
     
     /**
@@ -121,7 +122,7 @@ contract CarPurchase is Ownable {
     function getMyDocuments() public view returns (string memory) {
         return documents[msg.sender];
     }
-
+    
     /**
     * Allows the buyer to approve or decline their step in the process.
     */
@@ -131,18 +132,18 @@ contract CarPurchase is Ownable {
             state = PurchaseState.AWAITING_INSN;
         } else {
             state = PurchaseState.DECLINED;
+            CarChain(owner()).completePurchase();
         }
     }
-    
+
     /**
     * Allows the bank to approve or decline their step in the process.
     */
     function bankInput(bool approve) public {
         require(msg.sender == CarChain(owner()).getBank(), "Only the bank can provide bank input.");
         require(state == PurchaseState.AWAITING_BANK, "Not presently awaiting bank input.");
-        require(strlen(documents[_buyerAddr]) != 0, "Loan terms have not been shared with the buyer."); 
         if(approve){
-            state = PurchaseState.AWAITING_BUYER;
+            state = PurchaseState.AWAITING_INSN;
         } else {
             state = PurchaseState.DECLINED_BANK;
         }
